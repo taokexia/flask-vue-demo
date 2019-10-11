@@ -41,8 +41,32 @@ class MessageForm(Form):
     """
     根据 Message Model 定义相应的 Form
     """
-    name = StringField(validators=[DataRequired(), Length(1, 64)])
-    text = StringField(validators=[DataRequired(), Length(1, 1000)])
+    #name = StringField(validators=[DataRequired(), Length(1, 64)])
+    #text = StringField(validators=[DataRequired(), Length(1, 1000)])
+    # 自定义返回信息很简单，只要在每个验证器中添加 `message` 就可以了
+    name = StringField(validators=[
+        DataRequired(message=u'请输入您的姓名'),
+        Length(1, 10, message=u'姓名长度需要在1-10个字符之间')
+    ])
+    text = StringField(validators=[
+        DataRequired(message=u'请输入您的留言'),
+        Length(10, 1000, message=u'留言长度要在10~1000字符之间')
+    ])
+    
+    # 这个函数是我们自定义的验证函数，用于检查名字是否已经存在
+    # 要自定义验证函数有一定的格式：
+    # 函数名称：validate + field_name
+    # 参数：要传入 field，在函数中可以通过 `field.data` 获取字段值
+    # 函数体：检测到错误，raise ValidationError
+    def validate_name(self, field):
+        if Message.query.filter_by(name=field.data).first():
+            raise ValidationError(u'名称已经存在')
+
+    def create_message(self):
+        msg = Message(name=self.name.data, text=self.text.data)
+        db.session.add(msg)
+        db.session.commit()
+        return msg
 
 
 @app.route('/api/messages', methods=['GET'])
@@ -66,11 +90,15 @@ def create_message():
         # 422 表示 请求是正确的，但服务器处理不了请求的数据
         return jsonify(ok=False, errors=form.errors), 422
     # 请求数据无误创建 Message
-    msg = Message(name=formdata['name'], text=formdata['text'])
-    db.session.add(msg)
-    db.session.commit()
+    #msg = Message(name=formdata['name'], text=formdata['text'])
+    #db.session.add(msg)
+    #db.session.commit()
+    msg = form.create_message()
+    # 这里需要注意一下，和前面不同的是我们将创建的 msg 返回给了前端，
+    # 这样前端就不要自己构建 message 了
+    return jsonify(msg.to_dict()), 201
     # 201 表示资源创建成功
-    return jsonify(ok=True), 201
+    #return jsonify(ok=True), 201
 
 
 if __name__ == '__main__':
